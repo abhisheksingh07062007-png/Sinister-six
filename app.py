@@ -504,6 +504,18 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
 
     st.subheader("📱 Driver Dashboard — Trip Completion & Re-Routing")
 
-    st.write(
-        f"**Driver:** {summary['driver_name']}  |  **Truck:** {summary['truck_type']}  |  "
-        f"**Current Trip:** 
+    st.write    # ------------------------------------------------------------------------
+    # 4. DRIVER DASHBOARD & AUTOMATED RETURN LOAD
+    # ------------------------------------------------------------------------
+
+    st.subheader("📱 Driver Dashboard — Trip Completion & Re-Routing")
+
+    driver_str = f"**Driver:** {summary['driver_name']}  |  **Truck:** {summary['truck_type']}  |  **Current Trip:** {summary['from_city']} → {summary['to_city']}"
+    st.write(driver_str)
+
+    st.button(
+        "✅ Mark Trip Complete & Assign Return Load",
+        use_container_width=True,
+        on_click=handle_return_load_click
+    )
+    
