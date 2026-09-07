@@ -148,7 +148,7 @@ def fetch_osrm_route(origin_latlon, dest_latlon):
     o_lat, o_lon = origin_latlon
     d_lat, d_lon = dest_latlon
 
-    url = f"{OSRM_BASE_URL}/{o_lon},{o_lat};{d_lon},{d_lat}"
+    url = OSRM_BASE_URL + "/" + str(o_lon) + "," + str(o_lat) + ";" + str(d_lon) + "," + str(d_lat)
     params = {"overview": "full", "geometries": "geojson", "steps": "false"}
 
     response = requests.get(url, params=params, timeout=20)
@@ -202,8 +202,8 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
         amenities.append({
             "type": "toll",
             "coord": route_coords[idx],
-            "name": f"NH Toll Plaza #{i}",
-            "detail": f"Estimated toll: Rs {toll_price} ({specs['toll_class']})",
+            "name": "NH Toll Plaza #" + str(i),
+            "detail": "Estimated toll: Rs " + str(toll_price) + " (" + str(specs['toll_class']) + ")",
         })
 
     dhaba_names = ["Highway King Dhaba", "Punjabi Rasoi", "Truckers Point", "Sher-e-Punjab Dhaba", "National Highway Bhojnalya"]
@@ -223,7 +223,7 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
         amenities.append({
             "type": "mechanic",
             "coord": route_coords[idx],
-            "name": f"Highway Truck Care Center {i}",
+            "name": "Highway Truck Care Center " + str(i),
             "detail": "24/7 tyre, puncture, clutch & engine repair for heavy vehicles",
         })
 
@@ -233,7 +233,7 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
         amenities.append({
             "type": "hospital",
             "coord": route_coords[idx],
-            "name": f"NH Trauma & Emergency Care {i}",
+            "name": "NH Trauma & Emergency Care " + str(i),
             "detail": "24-hour emergency ward, ambulance on standby",
         })
 
@@ -244,8 +244,8 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
         amenities.append({
             "type": "fuel",
             "coord": route_coords[idx],
-            "name": f"{brand} Fuel Station",
-            "detail": f"Diesel available, approx Rs {DIESEL_PRICE_PER_L}/L",
+            "name": brand + " Fuel Station",
+            "detail": "Diesel available, approx Rs " + str(DIESEL_PRICE_PER_L) + "/L",
         })
 
     for frac in (0.04, 0.96):
@@ -255,7 +255,7 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
             "type": "no_entry",
             "coord": route_coords[idx],
             "name": "City Limit — Heavy Vehicle Restriction",
-            "detail": f"No entry for heavy trucks {window}. Use ring-road bypass.",
+            "detail": "No entry for heavy trucks " + window + ". Use ring-road bypass.",
         })
 
     return amenities
@@ -281,13 +281,13 @@ def build_route_map(route_coords, amenities, origin_name, origin_coord, dest_nam
 
     folium.Marker(
         location=origin_coord,
-        popup=f"<b>Origin:</b> {origin_name}",
+        popup="<b>Origin:</b> " + str(origin_name),
         icon=folium.Icon(color="blue", icon="play", prefix="fa"),
     ).add_to(fmap)
 
     folium.Marker(
         location=dest_coord,
-        popup=f"<b>Destination:</b> {dest_name}",
+        popup="<b>Destination:</b> " + str(dest_name),
         icon=folium.Icon(color="black", icon="flag-checkered", prefix="fa"),
     ).add_to(fmap)
 
@@ -298,7 +298,7 @@ def build_route_map(route_coords, amenities, origin_name, origin_coord, dest_nam
 
     for a in amenities:
         style = AMENITY_STYLE[a["type"]]
-        popup_html = f"<b>{a['name']}</b><br>{a['detail']}"
+        popup_html = "<b>" + str(a['name']) + "</b><br>" + str(a['detail'])
         folium.Marker(
             location=a["coord"],
             popup=folium.Popup(popup_html, max_width=280),
@@ -360,15 +360,15 @@ def assign_return_load(current_dest_city, truck_key):
 # ----------------------------------------------------------------------------
 
 if "trip_computed" not in st.session_state:
-    st.session_state.trip_computed = False
+    st.session_state["trip_computed"] = False
 if "route_data" not in st.session_state:
-    st.session_state.route_data = None
+    st.session_state["route_data"] = None
 if "amenities" not in st.session_state:
-    st.session_state.amenities = None
+    st.session_state["amenities"] = None
 if "trip_summary" not in st.session_state:
-    st.session_state.trip_summary = None
+    st.session_state["trip_summary"] = None
 if "return_load" not in st.session_state:
-    st.session_state.return_load = None
+    st.session_state["return_load"] = None
 
 # ----------------------------------------------------------------------------
 # HEADER
@@ -410,10 +410,10 @@ if submitted:
     specs = TRUCK_SPECS[truck_type]
     if cargo_load > specs["max_load_ton"] * 1.1:
         st.error(
-            f"⚠️ Cargo load ({cargo_load} T) exceeds the safe limit for {truck_type} "
-            f"(max rated capacity: {specs['max_load_ton']} T). Please reduce the load or choose a heavier truck."
+            "⚠️ Cargo load (" + str(cargo_load) + " T) exceeds safe limit for " + str(truck_type) + 
+            " (max capacity: " + str(specs['max_load_ton']) + " T). Reduce load or choose heavier truck."
         )
-        st.session_state.trip_computed = False
+        st.session_state["trip_computed"] = False
     else:
         with st.spinner("Fetching real highway route from OSRM and running AI fuel prediction..."):
             try:
@@ -427,10 +427,10 @@ if submitted:
                 model = train_fuel_model()
                 predicted_fuel = predict_fuel_needed(model, route["distance_km"], cargo_load, truck_type)
 
-                st.session_state.trip_computed = True
-                st.session_state.route_data = route
-                st.session_state.amenities = amenities
-                st.session_state.trip_summary = {
+                st.session_state["trip_computed"] = True
+                st.session_state["route_data"] = route
+                st.session_state["amenities"] = amenities
+                st.session_state["trip_summary"] = {
                     "driver_name": driver_name,
                     "truck_type": truck_type,
                     "current_fuel": current_fuel,
@@ -441,13 +441,13 @@ if submitted:
                     "distance_km": route["distance_km"],
                     "duration_min": route["duration_min"],
                 }
-                st.session_state.return_load = None
+                st.session_state["return_load"] = None
             except requests.exceptions.RequestException:
-                st.error("🚫 Could not reach the OSRM routing service. Please check your internet connection and try again.")
-                st.session_state.trip_computed = False
+                st.error("🚫 Could not reach the OSRM routing service. Check internet connection.")
+                st.session_state["trip_computed"] = False
             except ValueError as e:
-                st.error(f"🚫 Routing error: {e}")
-                st.session_state.trip_computed = False
+                st.error("🚫 Routing error: " + str(e))
+                st.session_state["trip_computed"] = False
 
 st.divider()
 
@@ -456,38 +456,37 @@ st.divider()
 # ----------------------------------------------------------------------------
 
 if st.session_state.get("trip_computed") and st.session_state.get("trip_summary") is not None:
-    summary = st.session_state.trip_summary
-    route = st.session_state.route_data
-    amenities = st.session_state.amenities
+    summary = st.session_state["trip_summary"]
+    route = st.session_state["route_data"]
+    amenities = st.session_state["amenities"]
 
     st.subheader("🗺️ Real Highway Route & Amenities")
-    st.caption("Green line follows actual roads via OSRM. Toggle amenity layers using the control in the top-right of the map.")
+    st.caption("Green line follows actual roads via OSRM.")
 
     fmap = build_route_map(
         route["coords"], amenities,
         summary["from_city"], CITY_COORDS[summary["from_city"]],
         summary["to_city"], CITY_COORDS[summary["to_city"]],
     )
-    # Added key to prevent streamlit-folium re-render crashes
     st_folium(fmap, width=None, height=520, returned_objects=[], key="main_route_map")
 
     st.subheader("📊 Trip Insights")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Actual Road Distance", f"{summary['distance_km']} km")
-    m2.metric("Estimated Drive Time", f"{summary['duration_min']:.0f} min (~{summary['duration_min']/60:.1f} hrs)")
-    m3.metric("AI-Predicted Fuel Needed", f"{summary['predicted_fuel']} L")
-    m4.metric("Current Fuel in Tank", f"{summary['current_fuel']} L")
+    m1.metric("Actual Road Distance", str(summary['distance_km']) + " km")
+    m2.metric("Estimated Drive Time", str(round(summary['duration_min'])) + " min")
+    m3.metric("AI-Predicted Fuel Needed", str(summary['predicted_fuel']) + " L")
+    m4.metric("Current Fuel in Tank", str(summary['current_fuel']) + " L")
 
     fuel_diff = round(summary["current_fuel"] - summary["predicted_fuel"], 1)
     estimated_cost = round(summary["predicted_fuel"] * DIESEL_PRICE_PER_L)
 
     if fuel_diff < 0:
-        st.error(f"⚠️ Short of {abs(fuel_diff)} Liters — refuel before departure or plan a fuel stop en route.")
+        st.error("⚠️ Short of " + str(abs(fuel_diff)) + " Liters — refuel before departure.")
     else:
-        st.success(f"✅ Surplus {fuel_diff} Liters — sufficient fuel for this trip.")
+        st.success("✅ Surplus " + str(fuel_diff) + " Liters — sufficient fuel for this trip.")
 
-    st.info(f"⛽ Estimated Diesel Cost for this trip: **Rs {estimated_cost:,.0f}** (at Rs {DIESEL_PRICE_PER_L}/L)")
+    st.info("⛽ Estimated Diesel Cost for this trip: **Rs " + f"{estimated_cost:,.0f}" + "** (at Rs " + str(DIESEL_PRICE_PER_L) + "/L)")
 
     amenity_counts = pd.Series([a["type"] for a in amenities]).value_counts()
     with st.expander("🛣️ Highway Amenities Along This Route"):
@@ -504,12 +503,5 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
 
     st.subheader("📱 Driver Dashboard — Trip Completion & Re-Routing")
 
-    driver_str = f"**Driver:** {summary['driver_name']}  |  **Truck:** {summary['truck_type']}  |  **Current Trip:** {summary['from_city']} → {summary['to_city']}"
-    st.write(driver_str)
-
-    st.button(
-        "✅ Mark Trip Complete & Assign Return Load",
-        use_container_width=True,
-        on_click=handle_return_load_click
-    )
-
+    driver_name_val = str(summary.get("driver_name", "Driver"))
+    truck_type_val = str(summary.get("truck_type", "Truck
