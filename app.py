@@ -311,11 +311,10 @@ def build_route_map(route_coords, amenities, origin_name, origin_coord, dest_nam
 
 
 # ----------------------------------------------------------------------------
-# RETURN LOAD ASSIGNMENT ENGINE (SAFE FIX)
+# RETURN LOAD ASSIGNMENT ENGINE
 # ----------------------------------------------------------------------------
 
 def assign_return_load(current_dest_city, truck_key):
-    # original origin node as current dest
     candidate_cities = [c for c in CITY_COORDS.keys() if c != current_dest_city]
     return_dest_city = random.choice(candidate_cities)
 
@@ -456,7 +455,7 @@ st.divider()
 # 2 & 3. ROUTE MAP + TRIP INSIGHTS
 # ----------------------------------------------------------------------------
 
-if st.session_state.trip_computed and st.session_state.trip_summary is not None:
+if st.session_state.get("trip_computed") and st.session_state.get("trip_summary") is not None:
     summary = st.session_state.trip_summary
     route = st.session_state.route_data
     amenities = st.session_state.amenities
@@ -469,7 +468,8 @@ if st.session_state.trip_computed and st.session_state.trip_summary is not None:
         summary["from_city"], CITY_COORDS[summary["from_city"]],
         summary["to_city"], CITY_COORDS[summary["to_city"]],
     )
-    st_folium(fmap, width=None, height=520, returned_objects=[])
+    # Added key to prevent streamlit-folium re-render crashes
+    st_folium(fmap, width=None, height=520, returned_objects=[], key="main_route_map")
 
     st.subheader("📊 Trip Insights")
 
@@ -506,4 +506,4 @@ if st.session_state.trip_computed and st.session_state.trip_summary is not None:
 
     st.write(
         f"**Driver:** {summary['driver_name']}  |  **Truck:** {summary['truck_type']}  |  "
-        f"**Current Trip:** {summary['from_city']} → {summary['to_city']
+        f"**Current Trip:** 
