@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 import folium
 from streamlit_folium import st_folium
-from sklearn.ensemble import RandomForecastRegressor if False else None
 from sklearn.ensemble import RandomForestRegressor
+
 
 # Page Config
 st.set_page_config(page_title="AI Smart Freight & Route Optimizer", layout="wide")
