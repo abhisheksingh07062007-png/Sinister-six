@@ -36,40 +36,34 @@ TRUCK_SPECS = {
         "max_load_ton": 1.5,
         "base_mileage_kmpl": 15.0,
         "tank_capacity_l": 45,
-        "toll_class": "LMV",
         "toll_multiplier": 1.0,
     },
     "Eicher Pro 2049 / 3.5 Ton": {
         "max_load_ton": 3.5,
         "base_mileage_kmpl": 10.5,
         "tank_capacity_l": 120,
-        "toll_class": "LCV",
         "toll_multiplier": 1.5,
     },
     "Tata 1109 6-Wheeler / 8 Ton": {
         "max_load_ton": 8.0,
         "base_mileage_kmpl": 6.5,
         "tank_capacity_l": 200,
-        "toll_class": "Bus-Truck",
         "toll_multiplier": 2.2,
     },
     "10-Wheeler Heavy Freight / 16 Ton": {
         "max_load_ton": 16.0,
         "base_mileage_kmpl": 4.2,
         "tank_capacity_l": 300,
-        "toll_class": "HCM",
         "toll_multiplier": 3.2,
     },
     "12/14-Wheeler Trailer / 30+ Ton": {
         "max_load_ton": 32.0,
         "base_mileage_kmpl": 2.6,
         "tank_capacity_l": 450,
-        "toll_class": "MAV",
         "toll_multiplier": 4.5,
     },
 }
 
-DIESEL_PRICE_PER_L = 92.0
 PAYOUT_PER_KM = 32.0
 PAYOUT_PER_TON = 180.0
 OSRM_BASE_URL = "http://router.project-osrm.org/route/v1/driving"
@@ -77,7 +71,7 @@ OSRM_BASE_URL = "http://router.project-osrm.org/route/v1/driving"
 # AI FUEL PREDICTION MODEL
 @st.cache_resource(show_spinner=False)
 def train_fuel_model():
-    rng = np.random.default_rng(42)
+    rng = np.random.defaultrng(42)
     n_samples = 6000
     truck_list = list(TRUCK_SPECS.values())
     distances = rng.uniform(50, 2200, n_samples)
@@ -137,16 +131,17 @@ AMENITY_STYLE = {
     "dhaba": {"icon": "cutlery", "color": "green", "prefix": "fa", "label": "Dhaba"},
     "mechanic": {"icon": "wrench", "color": "gray", "prefix": "fa", "label": "Mechanic"},
     "hospital": {"icon": "plus-square", "color": "red", "prefix": "fa", "label": "Hospital"},
-    "fuel": {"icon": "tint", "color": "blue", "prefix": "fa", "label": "Fuel Pump"},
-    "no_entry": {"icon": "ban", "color": "darkred", "prefix": "fa", "label": "No-Entry"},
+    "fuel": {"icon": "tint", "color": "blue", "prefix": "fa", "label": "Cheapest Fuel Pump Stop"},
+    "other_fuel": {"icon": "tint", "color": "lightgray", "prefix": "fa", "label": "Other Fuel Pump"},
 }
 
-def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
+def generate_route_amenities(route_coords, distance_km, truck_key, current_fuel, predicted_fuel, seed=7):
     rng = random.Random(seed)
     n_points = len(route_coords)
     specs = TRUCK_SPECS[truck_key]
     amenities = []
     
+    # 1. TOLLS
     n_tolls = max(1, int(distance_km // 60))
     for i in range(1, n_tolls + 1):
         idx = min(max(int(n_points * (i / (n_tolls + 1))), 0), n_points - 1)
@@ -154,12 +149,13 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
         amenities.append({
             "type": "toll",
             "coord": route_coords[idx],
-            "name": "Toll #" + str(i),
+            "name": "Toll Plaza #" + str(i),
             "detail": "Cost: Rs " + str(toll_price),
             "cost_val": toll_price,
             "index": idx
         })
 
+    # 2. DHABAS
     n_dhabas = max(1, int(distance_km // 120))
     for i in range(1, n_dhabas + 1):
         idx = min(max(int(n_points * (i / (n_dhabas + 1))), 0), n_points - 1)
@@ -167,11 +163,12 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
             "type": "dhaba",
             "coord": route_coords[idx],
             "name": "Highway Dhaba " + str(i),
-            "detail": "Food and Rest Stop",
+            "detail": "Food & Rest Stop",
             "cost_val": 0,
             "index": idx
         })
 
+    # 3. MECHANICS
     n_mech = max(1, int(distance_km // 180))
     for i in range(1, n_mech + 1):
         idx = min(max(int(n_points * (i / (n_mech + 1))), 0), n_points - 1)
@@ -185,43 +182,78 @@ def generate_route_amenities(route_coords, distance_km, truck_key, seed=7):
             "index": idx
         })
 
-    n_hosp = max(1, int(distance_km // 250))
-    for i in range(1, n_hosp + 1):
-        idx = min(max(int(n_points * (i / (n_hosp + 1))), 0), n_points - 1)
-        amenities.append({
-            "type": "hospital",
+    # 4. MULTIPLE FUEL PUMPS ALONG THE ROUTE WITH DIFFERENT PRICES
+    fuel_candidates = []
+    n_fuel_pumps = max(3, int(distance_km // 100))
+    for i in range(1, n_fuel_pumps + 1):
+        idx = min(max(int(n_points * (i / (n_fuel_pumps + 1))), 0), n_points - 1)
+        # Random price around 90 - 95 Rs/L
+        price_per_l = round(rng.uniform(89.5, 95.0), 2)
+        pump_name = "Highway Fuel Station #" + str(i)
+        fuel_candidates.append({
+            "index": idx,
             "coord": route_coords[idx],
-            "name": "Trauma Care " + str(i),
-            "detail": "Emergency Hospital",
-            "cost_val": 0,
-            "index": idx
+            "name": pump_name,
+            "price_per_l": price_per_l
         })
 
-    n_fuel = max(1, int(distance_km // 100))
-    for i in range(1, n_fuel + 1):
-        idx = min(max(int(n_points * (i / (n_fuel + 1))), 0), n_points - 1)
-        amenities.append({
-            "type": "fuel",
-            "coord": route_coords[idx],
-            "name": "Fuel Station " + str(i),
-            "detail": "Diesel Rs " + str(DIESEL_PRICE_PER_L) + "/L",
-            "cost_val": 0,
-            "index": idx
-        })
+    # AI Price Analysis: Select the cheapest fuel pump
+    best_pump = min(fuel_candidates, key=lambda x: x["price_per_l"])
+    needed_liters = max(0.0, round(predicted_fuel - current_fuel, 1))
 
-    return sorted(amenities, key=lambda x: x["index"])
+    for pump in fuel_candidates:
+        if pump["index"] == best_pump["index"]:
+            amenities.append({
+                "type": "fuel",
+                "coord": pump["coord"],
+                "name": "⭐ AI Suggested Stop: " + pump["name"],
+                "detail": "Cheapest Diesel: Rs " + str(pump["price_per_l"]) + "/L | Refuel " + str(needed_liters) + "L",
+                "cost_val": round(needed_liters * pump["price_per_l"], 1),
+                "index": pump["index"],
+                "price_per_l": pump["price_per_l"],
+                "needed_liters": needed_liters,
+                "is_best": True
+            })
+        else:
+            amenities.append({
+                "type": "other_fuel",
+                "coord": pump["coord"],
+                "name": pump["name"],
+                "detail": "Diesel Rate: Rs " + str(pump["price_per_l"]) + "/L (Higher Price)",
+                "cost_val": 0,
+                "index": pump["index"],
+                "price_per_l": pump["price_per_l"],
+                "is_best": False
+            })
 
-# ANIMATED MAP BUILDER WITH LIVE TRUCK LOCATION
-def build_route_map(route_coords, amenities, origin_name, origin_coord, dest_name, dest_coord, current_truck_idx):
+    return sorted(amenities, key=lambda x: x["index"]), fuel_candidates, best_pump
+
+# ANIMATED MAP BUILDER WITH PIT-STOP DETOUR
+def build_route_map(route_coords, amenities, origin_name, origin_coord, dest_name, dest_coord, current_truck_idx, best_pump):
     center = route_coords[current_truck_idx]
     fmap = folium.Map(location=center, zoom_start=8, tiles="OpenStreetMap")
 
+    # Main Route Polyline
     AntPath(
         locations=route_coords,
         color="#1a8f3c",
         pulse_color="#ffffff",
         weight=6,
         delay=1000
+    ).add_to(fmap)
+
+    # Pit-stop Detour Loop Visualization (Truck entering fuel station and returning to highway)
+    pump_coord = best_pump["coord"]
+    # Small detour points off the highway
+    detour_in = (pump_coord[0] + 0.003, pump_coord[1] + 0.003)
+    detour_path = [pump_coord, detour_in, pump_coord]
+    
+    folium.PolyLine(
+        locations=detour_path,
+        color="blue",
+        weight=4,
+        dash_array="5, 10",
+        tooltip="Fuel Pit-stop Detour (In & Out of Station)"
     ).add_to(fmap)
 
     folium.Marker(location=origin_coord, popup=origin_name, icon=folium.Icon(color="blue")).add_to(fmap)
@@ -245,33 +277,6 @@ def build_route_map(route_coords, amenities, origin_name, origin_coord, dest_nam
 
     return fmap
 
-def assign_return_load(current_dest_city, truck_key):
-    candidate_cities = [c for c in CITY_COORDS.keys() if c != current_dest_city]
-    return_dest_city = random.choice(candidate_cities)
-    origin_coord = CITY_COORDS[current_dest_city]
-    dest_coord = CITY_COORDS[return_dest_city]
-
-    try:
-        route = fetch_osrm_route(origin_coord, dest_coord)
-        distance_km = route["distance_km"]
-    except Exception:
-        distance_km = 450.0
-
-    specs = TRUCK_SPECS[truck_key]
-    return_load_ton = round(random.uniform(0.5, specs["max_load_ton"]), 1)
-    payout = round((distance_km * PAYOUT_PER_KM) + (return_load_ton * PAYOUT_PER_TON), -1)
-    pickup_window = datetime.now() + timedelta(hours=random.randint(2, 6))
-
-    return {
-        "return_pickup_city": current_dest_city,
-        "return_dest_city": return_dest_city,
-        "distance_km": distance_km,
-        "load_ton": return_load_ton,
-        "commodity": "FMCG / Industrial Goods",
-        "payout_inr": payout,
-        "pickup_by": pickup_window.strftime("%d %b, %I:%M %p"),
-    }
-
 # INITIALIZE SESSION STATE
 if "trip_computed" not in st.session_state:
     st.session_state["trip_computed"] = False
@@ -279,10 +284,12 @@ if "route_data" not in st.session_state:
     st.session_state["route_data"] = None
 if "amenities" not in st.session_state:
     st.session_state["amenities"] = None
+if "all_pumps" not in st.session_state:
+    st.session_state["all_pumps"] = None
+if "best_pump" not in st.session_state:
+    st.session_state["best_pump"] = None
 if "trip_summary" not in st.session_state:
     st.session_state["trip_summary"] = None
-if "return_load" not in st.session_state:
-    st.session_state["return_load"] = None
 if "financial_ledger" not in st.session_state:
     st.session_state["financial_ledger"] = None
 if "truck_idx" not in st.session_state:
@@ -302,7 +309,7 @@ with st.form("pretrip_form"):
     with col1:
         driver_name = st.text_input("Driver Name", value="Ramesh Kumar")
         truck_type = st.selectbox("Truck Type", options=list(TRUCK_SPECS.keys()), index=2)
-        current_fuel = st.number_input("Current Fuel (L)", min_value=0.0, value=40.0)
+        current_fuel = st.number_input("Current Fuel in Tank (L)", min_value=0.0, value=40.0)
     with col2:
         city_options = list(CITY_COORDS.keys())
         from_city = st.selectbox("From", options=city_options, index=0)
@@ -310,7 +317,7 @@ with st.form("pretrip_form"):
         to_city = st.selectbox("To", options=to_city_options, index=0)
         cargo_load = st.number_input("Cargo Weight (Tons)", min_value=0.0, value=5.0)
 
-    submitted = st.form_submit_button("🧭 Calculate Route & Start GPS Tracking", use_container_width=True)
+    submitted = st.form_submit_button("🧭 Analyze All Fuel Prices & Plan Best Route", use_container_width=True)
 
 if submitted:
     specs = TRUCK_SPECS[truck_type]
@@ -318,22 +325,25 @@ if submitted:
         st.error("⚠️ Overload Error: Reduce cargo weight.")
         st.session_state["trip_computed"] = False
     else:
-        with st.spinner("Calculating live route & training AI model..."):
+        with st.spinner("Analyzing fuel prices across all highway stations & optimizing route..."):
             try:
                 origin_coord = CITY_COORDS[from_city]
                 dest_coord = CITY_COORDS[to_city]
                 route = fetch_osrm_route(origin_coord, dest_coord)
-                amenities = generate_route_amenities(
-                    route["coords"], route["distance_km"], truck_type
-                )
                 model = train_fuel_model()
                 predicted_fuel = predict_fuel_needed(
                     model, route["distance_km"], cargo_load, truck_type
+                )
+                
+                amenities, all_pumps, best_pump = generate_route_amenities(
+                    route["coords"], route["distance_km"], truck_type, current_fuel, predicted_fuel
                 )
 
                 st.session_state["trip_computed"] = True
                 st.session_state["route_data"] = route
                 st.session_state["amenities"] = amenities
+                st.session_state["all_pumps"] = all_pumps
+                st.session_state["best_pump"] = best_pump
                 st.session_state["trip_summary"] = {
                     "driver_name": driver_name,
                     "truck_type": truck_type,
@@ -345,7 +355,6 @@ if submitted:
                     "distance_km": route["distance_km"],
                     "duration_min": route["duration_min"],
                 }
-                st.session_state["return_load"] = None
                 st.session_state["financial_ledger"] = None
                 st.session_state["truck_idx"] = 0
                 st.session_state["is_tracking"] = True
@@ -355,47 +364,42 @@ if submitted:
 
 st.divider()
 
-# 2. DASHBOARD & LIVE MAP
+# 2. DASHBOARD & MAP
 if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"):
     summary = st.session_state["trip_summary"]
     route = st.session_state["route_data"]
     amenities = st.session_state["amenities"]
+    all_pumps = st.session_state["all_pumps"]
+    best_pump = st.session_state["best_pump"]
     route_pts = route["coords"]
     total_pts = len(route_pts)
-
     curr_idx = st.session_state["truck_idx"]
 
-    # REAL-TIME ALERTS PANEL
-    st.subheader("🔔 Real-Time Highway & GPS Alerts")
+    # AI FUEL PRICE COMPARISON TABLE
+    st.subheader("💡 AI Fuel Price Analysis (सभी पेट्रोल पंपों के रेट का विश्लेषण)")
+    
+    pumps_df = pd.DataFrame([
+        {
+            "Station Name": p["name"],
+            "Diesel Rate (INR/L)": "Rs " + str(p["price_per_l"]),
+            "Status": "⭐ Selected (Cheapest)" if p["index"] == best_pump["index"] else "Passed (Expensive)"
+        }
+        for p in all_pumps
+    ])
+    st.table(pumps_df)
 
+    # FUEL ALERT BANNER
     req_fuel = summary["predicted_fuel"]
     curr_fuel = summary["current_fuel"]
-    
-    if curr_fuel < req_fuel:
-        shortage = round(req_fuel - curr_fuel, 1)
-        st.error("🚨 **FUEL ALERT:** ईंधन कम है! AI के अनुसार इस ट्रिप में " + str(req_fuel) + "L चाहिए। " + str(shortage) + "L डीजल तुरंत डलवाएं!")
-    else:
-        st.success("⛽ **Fuel Status:** पर्याप्त फ्यूल उपलब्ध है। (टैंक: " + str(curr_fuel) + "L | AI Predicted Needed: " + str(req_fuel) + "L)")
+    needed_liters = max(0.0, round(req_fuel - curr_fuel, 1))
 
-    # 500m Geofencing Detector
-    next_amenity = None
-    for a in amenities:
-        if a["index"] >= curr_idx:
-            next_amenity = a
-            break
+    st.success(
+        "⛽ **AI Decision:** ट्रक हाईवे के **" + str(best_pump["name"]) + 
+        "** के अंदर पिट-स्टॉप (Pit-stop) लेगा। वहाँ रेट सबसे कम (Rs " + str(best_pump["price_per_l"]) + 
+        "/L) है। रिफ्यूलिंग के बाद ट्रक वापस मुख्य हाईवे पर आ जाएगा।"
+    )
 
-    if next_amenity:
-        dist_ahead_km = round(((next_amenity["index"] - curr_idx) / total_pts) * summary["distance_km"], 2)
-        dist_meters = int(dist_ahead_km * 1000)
-        
-        if dist_meters <= 500:
-            st.error("🚨 **500m GEONOTIFICATION ALERT (आगे " + str(dist_meters) + " मीटर पर):** " + str(next_amenity["name"]) + " — " + str(next_amenity["detail"]))
-        elif dist_ahead_km <= 2.0:
-            st.warning("⚠️ **PROXIMITY WARNING (आगे " + str(dist_ahead_km) + " km):** " + str(next_amenity["name"]) + " — " + str(next_amenity["detail"]))
-        else:
-            st.info("ℹ️ **Up Ahead (" + str(dist_ahead_km) + " km):** " + str(next_amenity["name"]) + " — " + str(next_amenity["detail"]))
-
-    # GPS SIMULATION CONTROLS
+    # GPS TRACKING CONTROLS
     col_play, col_pct = st.columns([1, 4])
     with col_play:
         if st.button("⏯️ Pause / Play Live GPS"):
@@ -405,7 +409,7 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
         st.progress(curr_idx / max(total_pts - 1, 1), text="📡 Live GPS Tracking Progress: " + str(pct_complete) + "%")
 
     # MAP DISPLAY
-    st.subheader("🗺️ Live GPS Tracking & Animated Route")
+    st.subheader("🗺️ Live GPS Route Map & Pit-Stop Detour")
     fmap = build_route_map(
         route_pts,
         amenities,
@@ -413,102 +417,74 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
         CITY_COORDS[summary["from_city"]],
         summary["to_city"],
         CITY_COORDS[summary["to_city"]],
-        curr_idx
+        curr_idx,
+        best_pump
     )
     st_folium(fmap, width=None, height=480, returned_objects=[], key="main_map_" + str(curr_idx))
 
-    st.subheader("📊 AI Route Insights")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Distance", str(summary["distance_km"]) + " km")
-    m2.metric("Time", str(round(summary["duration_min"])) + " min")
-    m3.metric("AI Required Fuel", str(summary["predicted_fuel"]) + " L")
-    m4.metric("Current Fuel Tank", str(summary["current_fuel"]) + " L")
-
     st.divider()
 
-    # 3. DRIVER DASHBOARD, TRIP FINANCIALS & RETURN LOAD ASSIGNMENT
-    st.subheader("📱 Driver Dashboard & Trip Financial Summary")
+    # 3. PROFIT & LOSS CALCULATOR
+    st.subheader("💰 Trip Financials & Profit/Loss Calculation")
 
-    d_name = str(summary.get("driver_name"))
-    t_type = str(summary.get("truck_type"))
-    f_city = str(summary.get("from_city"))
-    t_city = str(summary.get("to_city"))
-
-    st.write("**Driver:** " + d_name + " | **Truck:** " + t_type + " | **Current Active Trip:** " + f_city + " ➔ " + t_city)
-
-    # COMPLETE TRIP & CALCULATE FINANCIALS BUTTON
-    if st.button("🏁 Complete Trip & Calculate Profit / Loss", use_container_width=True):
-        # 1. Total Revenue Calculation
+    if st.button("🏁 Calculate Complete Trip Profit & Loss", use_container_width=True):
         gross_revenue = round((summary["distance_km"] * PAYOUT_PER_KM) + (summary["cargo_load"] * PAYOUT_PER_TON), -1)
-
-        # 2. Fuel Expense
-        fuel_expense = round(summary["predicted_fuel"] * DIESEL_PRICE_PER_L, 1)
-
-        # 3. Toll Expense
+        
+        # Calculate Refuel Expense using cheapest price found
+        fuel_expense = round(needed_liters * best_pump["price_per_l"], 1)
         toll_expense = sum([a["cost_val"] for a in amenities if a["type"] == "toll"])
-
-        # 4. Repair/Maintenance Expense
         repair_expense = sum([a["cost_val"] for a in amenities if a["type"] == "mechanic"])
 
-        # 5. Net Profit
-        total_expenses = fuel_expense + toll_expense + repair_expense
+        total_expenses = round(fuel_expense + toll_expense + repair_expense, 1)
         net_profit = round(gross_revenue - total_expenses, 1)
 
-        # Store financial ledger in state
         st.session_state["financial_ledger"] = {
             "gross_revenue": gross_revenue,
             "fuel_expense": fuel_expense,
             "toll_expense": toll_expense,
             "repair_expense": repair_expense,
             "total_expenses": total_expenses,
-            "net_profit": net_profit
+            "net_profit": net_profit,
+            "best_pump_name": best_pump["name"],
+            "best_rate": best_pump["price_per_l"],
+            "needed_liters": needed_liters
         }
 
-        # Assign Return Load
-        rl = assign_return_load(t_city, t_type)
-        st.session_state["return_load"] = rl
-
-        # Prepare for Return Route Switch
-        ret_from = rl["return_pickup_city"]
-        ret_to = rl["return_dest_city"]
-        ret_cargo = rl["load_ton"]
-
-        new_route = fetch_osrm_route(CITY_COORDS[ret_from], CITY_COORDS[ret_to])
-        new_amenities = generate_route_amenities(new_route["coords"], new_route["distance_km"], t_type)
-        model = train_fuel_model()
-        ret_pred_fuel = predict_fuel_needed(model, new_route["distance_km"], ret_cargo, t_type)
-
-        st.session_state["route_data"] = new_route
-        st.session_state["amenities"] = new_amenities
-        st.session_state["truck_idx"] = 0
-        st.session_state["is_tracking"] = True
-        st.session_state["trip_summary"] = {
-            "driver_name": d_name,
-            "truck_type": t_type,
-            "current_fuel": summary["current_fuel"],
-            "from_city": ret_from,
-            "to_city": ret_to,
-            "cargo_load": ret_cargo,
-            "predicted_fuel": ret_pred_fuel,
-            "distance_km": new_route["distance_km"],
-            "duration_min": new_route["duration_min"],
-        }
-        st.rerun()
-
-    # DISPLAY TRIP FINANCIAL LEDGER IF AVAILABLE
     if st.session_state.get("financial_ledger"):
         ledger = st.session_state["financial_ledger"]
-        st.subheader("💰 Completed Trip Profit & Loss Statement (P&L)")
-
+        
         p1, p2, p3, p4 = st.columns(4)
-        p1.metric(" Gross Revenue (कमाई)", "Rs " + str(ledger["gross_revenue"]))
-        p2.metric("⛽ Fuel Cost (डीजल)", "Rs " + str(ledger["fuel_expense"]))
+        p1.metric("Gross Revenue (कुल कमाई)", "Rs " + str(ledger["gross_revenue"]))
+        p2.metric("⛽ Fuel Cost (डीजल खर्च)", "Rs " + str(ledger["fuel_expense"]))
         p3.metric("🛣️ Toll + Repairs (टोल व मरम्मत)", "Rs " + str(ledger["toll_expense"] + ledger["repair_expense"]))
         
         profit_val = ledger["net_profit"]
         if profit_val >= 0:
-            p4.metric("📈 Net Profit (शुद्ध लाभ)", "Rs " + str(profit_val), delta="Profit")
+            p4.metric("📈 Net Profit (शुद्ध मुनाफा)", "Rs " + str(profit_val), delta="Profit")
         else:
             p4.metric("📉 Net Loss (नुकसान)", "Rs " + str(profit_val), delta="-Loss")
 
-        # Detailed Expense Breakd
+        st.write("### 🧾 Detailed Ledger Breakdown")
+        breakdown_df = pd.DataFrame([
+            {"Item": "Total Gross Earnings", "Amount": "Rs " + str(ledger["gross_revenue"]), "Category": "Income (+)"},
+            {
+                "Item": "Refuel Expense (" + str(ledger["needed_liters"]) + "L at " + ledger["best_pump_name"] + " @ Rs " + str(ledger["best_rate"]) + "/L)",
+                "Amount": "Rs " + str(ledger["fuel_expense"]),
+                "Category": "Expense (-)"
+            },
+            {"Item": "Total Toll Taxes", "Amount": "Rs " + str(ledger["toll_expense"]), "Category": "Expense (-)"},
+            {"Item": "Maintenance / Mechanic Charges", "Amount": "Rs " + str(ledger["repair_expense"]), "Category": "Expense (-)"},
+            {"Item": "TOTAL EXPENSES", "Amount": "Rs " + str(ledger["total_expenses"]), "Category": "Subtotal (-)"},
+            {"Item": "NET TRIP PROFIT", "Amount": "Rs " + str(ledger["net_profit"]), "Category": "NET PROFIT"}
+        ])
+        st.table(breakdown_df)
+
+    # GPS AUTOMATIC TRACKING LOOP
+    if st.session_state["is_tracking"] and curr_idx < total_pts - 1:
+        time.sleep(8)
+        st.session_state["truck_idx"] = min(curr_idx + max(1, int(total_pts * 0.05)), total_pts - 1)
+        st.rerun()
+
+else:
+    st.info("👆 ऊपर फॉर्म भरें और 'Analyze All Fuel Prices & Plan Best Route' पर क्लिक करें।")
+    
