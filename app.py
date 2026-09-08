@@ -305,6 +305,13 @@ if "truck_idx" not in st.session_state:
 if "is_tracking" not in st.session_state:
     st.session_state["is_tracking"] = False
 
+# SAFE RERUN COMPATIBILITY
+def trigger_rerun():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    elif hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
+
 # HEADER
 st.title("🚛 Smart Freight AI: Real-Time Fleet & Route Optimization")
 st.divider()
@@ -383,7 +390,7 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
     total_pts = len(route_pts)
     curr_idx = st.session_state["truck_idx"]
 
-    # --- 1. LOW FUEL ALERT BANNER ---
+    # 1. LOW FUEL ALERT BANNER
     req_fuel = summary["predicted_fuel"]
     curr_fuel = summary["current_fuel"]
     needed_liters = max(0.0, round(req_fuel - curr_fuel, 1))
@@ -397,7 +404,7 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
     else:
         st.success("✅ **Tank Status:** आपकी गाड़ी में पर्याप्त ईंधन मौजूद है!")
 
-    # --- 2. 500m PROXIMITY RADAR ALERT ---
+    # 2. 500m PROXIMITY RADAR ALERT
     nearby_alerts = []
     lookahead_range = max(1, int(total_pts * 0.05))
     
@@ -410,7 +417,7 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
         for alert_msg in nearby_alerts:
             st.warning(alert_msg)
 
-    # --- 3. AI FUEL PRICE ANALYSIS TABLE ---
+    # 3. AI FUEL PRICE ANALYSIS TABLE
     st.subheader("💡 AI Fuel Price Analysis (सभी पेट्रोल पंपों के रेट का विश्लेषण)")
     
     pumps_df = pd.DataFrame([
@@ -502,7 +509,4 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
         st.table(breakdown_df)
 
     # AUTO-LOOP GPS MOVEMENT
-    if st.session_state["is_tracking"] and curr_idx < total_pts - 1:
-        time.sleep(8)
-        st.session_state["truck_idx"] = min(curr_idx + max(1, int(total_pts * 0.05)), total_pts - 1)
-        st.r
+    if st.session_state["is_tracking"] and curr_idx < t
