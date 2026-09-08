@@ -398,9 +398,8 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
         st.success("✅ **Tank Status:** आपकी गाड़ी में पर्याप्त ईंधन मौजूद है!")
 
     # --- 2. 500m PROXIMITY RADAR ALERT ---
-    # 500m / 0.5km Radar Logic based on index distance
     nearby_alerts = []
-    lookahead_range = max(1, int(total_pts * 0.05)) # Approximate ~500m to 1km ahead window
+    lookahead_range = max(1, int(total_pts * 0.05))
     
     for item in amenities:
         if curr_idx < item["index"] <= curr_idx + lookahead_range:
@@ -502,6 +501,8 @@ if st.session_state.get("trip_computed") and st.session_state.get("trip_summary"
         ])
         st.table(breakdown_df)
 
+    # AUTO-LOOP GPS MOVEMENT
     if st.session_state["is_tracking"] and curr_idx < total_pts - 1:
         time.sleep(8)
-        st.session_state["truck_idx"] = min(cur
+        st.session_state["truck_idx"] = min(curr_idx + max(1, int(total_pts * 0.05)), total_pts - 1)
+        st.r
